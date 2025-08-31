@@ -58,8 +58,18 @@ const EXPENSE_CATEGORIES = [
   'Shopping',
   'Utilities',
   'Healthcare',
+  'Groceries',
+  'Bills',
   'Other'
 ];
+
+const SPLIT_TYPES = [
+  { value: 'equal', label: 'Equal Split', icon: '÷' },
+  { value: 'exact', label: 'Exact Amounts', icon: '$' },
+  { value: 'percentage', label: 'Percentages', icon: '%' }
+] as const;
+
+type SplitType = typeof SPLIT_TYPES[number]['value'];
 
 const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpenseModalProps) => {
   const { user } = useAuth();
@@ -73,7 +83,8 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
   });
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [splits, setSplits] = useState<ExpenseSplit[]>([]);
-  const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
+  const [percentages, setPercentages] = useState<Record<string, number>>({});
+  const [splitType, setSplitType] = useState<SplitType>('equal');
 
   const resetForm = () => {
     setFormData({
@@ -85,6 +96,7 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
     });
     setSelectedMembers([]);
     setSplits([]);
+    setPercentages({});
     setSplitType('equal');
   };
 
@@ -108,6 +120,25 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
     setSplits(newSplits);
   };
 
+  const calculatePercentageSplits = () => {
+    const amount = parseFloat(formData.amount);
+    if (!amount) return;
+
+    const newSplits = selectedMembers.map(memberId => {
+      const percentage = percentages[memberId] || 0;
+      return {
+        userId: memberId,
+        amount: (amount * percentage) / 100,
+      };
+    });
+    setSplits(newSplits);
+  };
+
+  const handlePercentageChange = (userId: string, percentage: string) => {
+    const numPercentage = parseFloat(percentage) || 0;
+    setPercentages(prev => ({ ...prev, [userId]: numPercentage }));
+  };
+
   const handleSplitAmountChange = (userId: string, amount: string) => {
     const numAmount = parseFloat(amount) || 0;
     setSplits(prev => {
@@ -122,6 +153,10 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
 
   const getTotalSplitAmount = () => {
     return splits.reduce((sum, split) => sum + split.amount, 0);
+  };
+
+  const getTotalPercentage = () => {
+    return selectedMembers.reduce((sum, memberId) => sum + (percentages[memberId] || 0), 0);
   };
 
   const getInitials = (name: string) => {
@@ -148,10 +183,19 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
       return;
     }
 
-    const totalSplit = getTotalSplitAmount();
-    if (Math.abs(totalSplit - amount) > 0.01) {
-      toast.error(`Split amounts (${totalSplit.toFixed(2)}) don't match expense amount (${amount.toFixed(2)})`);
-      return;
+    // Validate splits based on split type
+    if (splitType === 'percentage') {
+      const totalPercentage = getTotalPercentage();
+      if (Math.abs(totalPercentage - 100) > 0.01) {
+        toast.error(`Percentages must add up to 100% (current: ${totalPercentage.toFixed(1)}%)`);
+        return;
+      }
+    } else {
+      const totalSplit = getTotalSplitAmount();
+      if (Math.abs(totalSplit - amount) > 0.01) {
+        toast.error(`Split amounts ($${totalSplit.toFixed(2)}) don't match expense amount ($${amount.toFixed(2)})`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -199,12 +243,16 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
     }
   };
 
-  // Auto-calculate equal splits when amount or selected members change
+  // Auto-calculate splits when relevant data changes
   React.useEffect(() => {
-    if (splitType === 'equal' && formData.amount && selectedMembers.length > 0) {
-      calculateEqualSplits();
+    if (formData.amount && selectedMembers.length > 0) {
+      if (splitType === 'equal') {
+        calculateEqualSplits();
+      } else if (splitType === 'percentage') {
+        calculatePercentageSplits();
+      }
     }
-  }, [formData.amount, selectedMembers, splitType]);
+  }, [formData.amount, selectedMembers, splitType, percentages]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -305,23 +353,20 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Label>Split Between</Label>
-              <div className="flex items-center space-x-2">
-                <Button
-                  type="button"
-                  variant={splitType === 'equal' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSplitType('equal')}
-                >
-                  Equal Split
-                </Button>
-                <Button
-                  type="button"
-                  variant={splitType === 'custom' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSplitType('custom')}
-                >
-                  Custom Split
-                </Button>
+              <div className="flex items-center space-x-1">
+                {SPLIT_TYPES.map((type) => (
+                  <Button
+                    key={type.value}
+                    type="button"
+                    variant={splitType === type.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSplitType(type.value)}
+                    className="flex items-center gap-1"
+                  >
+                    <span className="text-sm">{type.icon}</span>
+                    {type.label}
+                  </Button>
+                ))}
               </div>
             </div>
 
@@ -329,9 +374,10 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
               {group.members.map((member) => {
                 const isSelected = selectedMembers.includes(member.id);
                 const splitAmount = splits.find(s => s.userId === member.id)?.amount || 0;
+                const memberPercentage = percentages[member.id] || 0;
 
                 return (
-                  <div key={member.id} className="flex items-center space-x-3 p-2 rounded-lg border">
+                  <div key={member.id} className="flex items-center space-x-3 p-3 rounded-lg border bg-card">
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={(checked) => handleMemberToggle(member.id, checked as boolean)}
@@ -345,8 +391,9 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
                     <div className="flex-1">
                       <p className="font-medium">{member.name}</p>
                     </div>
-                    {isSelected && splitType === 'custom' && (
-                      <div className="w-24">
+                    
+                    {isSelected && splitType === 'exact' && (
+                      <div className="w-28">
                         <Input
                           type="number"
                           step="0.01"
@@ -358,9 +405,34 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
                         />
                       </div>
                     )}
+                    
+                    {isSelected && splitType === 'percentage' && (
+                      <div className="w-28 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          placeholder="0"
+                          value={memberPercentage || ''}
+                          onChange={(e) => handlePercentageChange(member.id, e.target.value)}
+                          className="text-right"
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
+                    )}
+                    
                     {isSelected && splitType === 'equal' && (
-                      <div className="w-24 text-right font-medium text-primary">
-                        ${splitAmount.toFixed(2)}
+                      <div className="w-28 text-right">
+                        <span className="font-medium text-primary">${splitAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    
+                    {isSelected && splitType === 'percentage' && (
+                      <div className="w-20 text-right">
+                        <span className="text-sm font-medium text-muted-foreground">
+                          ${splitAmount.toFixed(2)}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -369,18 +441,37 @@ const AddExpenseModal = ({ open, onOpenChange, group, onExpenseAdded }: AddExpen
             </div>
 
             {selectedMembers.length > 0 && (
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
                 <div className="flex items-center space-x-2">
                   <Calculator className="w-4 h-4" />
-                  <span className="font-medium">Total Split:</span>
+                  <span className="font-medium">
+                    {splitType === 'percentage' ? 'Total Percentage:' : 'Total Split:'}
+                  </span>
                 </div>
-                <span className={`font-bold ${
-                  Math.abs(getTotalSplitAmount() - parseFloat(formData.amount || '0')) < 0.01 
-                    ? 'text-success' 
-                    : 'text-destructive'
-                }`}>
-                  ${getTotalSplitAmount().toFixed(2)} / ${formData.amount || '0.00'}
-                </span>
+                <div className="text-right">
+                  {splitType === 'percentage' ? (
+                    <span className={`font-bold ${
+                      Math.abs(getTotalPercentage() - 100) < 0.01 
+                        ? 'text-success' 
+                        : 'text-destructive'
+                    }`}>
+                      {getTotalPercentage().toFixed(1)}% / 100%
+                    </span>
+                  ) : (
+                    <span className={`font-bold ${
+                      Math.abs(getTotalSplitAmount() - parseFloat(formData.amount || '0')) < 0.01 
+                        ? 'text-success' 
+                        : 'text-destructive'
+                    }`}>
+                      ${getTotalSplitAmount().toFixed(2)} / ${formData.amount || '0.00'}
+                    </span>
+                  )}
+                  {splitType === 'percentage' && (
+                    <div className="text-sm text-muted-foreground">
+                      Total: ${getTotalSplitAmount().toFixed(2)}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

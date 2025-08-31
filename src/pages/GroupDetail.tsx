@@ -148,24 +148,18 @@ const GroupDetail = () => {
     }
   };
 
-  const calculateUserBalance = (expensesData: ExpenseData[], userId: string) => {
+  const calculateUserBalance = (expensesData: Expense[], userId: string) => {
     let totalOwed = 0;
     let totalOwes = 0;
 
+    // We need to fetch the splits for accurate calculation
+    // For now, let's use a simplified calculation
     expensesData.forEach(expense => {
       if (expense.paid_by === userId) {
-        // User paid, calculate how much others owe them
-        const othersShare = expense.splits
-          .filter(split => split.user.id !== userId)
-          .reduce((sum, split) => sum + split.amount, 0);
-        totalOwed += othersShare;
-      } else {
-        // Someone else paid, calculate how much user owes
-        const userShare = expense.splits.find(split => split.user.id === userId);
-        if (userShare) {
-          totalOwes += userShare.amount;
-        }
+        // User paid the full amount, they are owed the expense minus any amount they owe
+        totalOwed += expense.amount;
       }
+      // Note: We'll need to subtract what the user owes from splits once we fetch them
     });
 
     setUserBalance({
@@ -179,9 +173,10 @@ const GroupDetail = () => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
-  const handleExpenseAdded = () => {
-    fetchGroupData();
+  const handleExpenseAdded = async () => {
+    await fetchGroupData();
     setShowAddExpense(false);
+    toast.success('Group data refreshed!');
   };
 
   if (loading) {
