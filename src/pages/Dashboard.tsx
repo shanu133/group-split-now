@@ -4,16 +4,27 @@ import { supabase, Group, Expense } from '@/lib/supabase';
 import DashboardLayout from '@/components/DashboardLayout';
 import GroupCard from '@/components/GroupCard';
 import ExpenseCard from '@/components/ExpenseCard';
+import CreateGroupModal from '@/components/CreateGroupModal';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
+import QuickStatsCard from '@/components/QuickStatsCard';
+import SearchAndFilter from '@/components/SearchAndFilter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Users, CreditCard, DollarSign, TrendingUp } from 'lucide-react';
+import { Plus, Users, CreditCard, DollarSign, TrendingUp, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [filteredGroups, setFilteredGroups] = useState<Group[]>([]);
   const [recentExpenses, setRecentExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [stats, setStats] = useState({
     totalGroups: 0,
     totalExpenses: 0,
@@ -26,6 +37,45 @@ const Dashboard = () => {
       fetchDashboardData();
     }
   }, [user]);
+
+  useEffect(() => {
+    filterAndSortGroups();
+  }, [groups, searchTerm, sortBy, sortOrder]);
+
+  const filterAndSortGroups = () => {
+    let filtered = groups;
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(group =>
+        group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        group.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let compareValue = 0;
+      
+      switch (sortBy) {
+        case 'name':
+          compareValue = a.name.localeCompare(b.name);
+          break;
+        case 'date':
+          compareValue = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        case 'members':
+          compareValue = (a.members?.length || 0) - (b.members?.length || 0);
+          break;
+        default:
+          compareValue = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+
+      return sortOrder === 'asc' ? compareValue : -compareValue;
+    });
+
+    setFilteredGroups(filtered);
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -88,14 +138,35 @@ const Dashboard = () => {
   };
 
   const handleViewGroup = (group: Group) => {
-    toast.info(`Viewing ${group.name} - Full group view coming soon!`);
+    navigate(`/group/${group.id}`);
+  };
+
+  const handleCreateGroup = () => {
+    setShowCreateGroup(true);
+  };
+
+  const handleGroupCreated = () => {
+    fetchDashboardData();
+    setShowCreateGroup(false);
   };
 
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="space-y-8">
+          <div className="bg-gradient-hero rounded-xl p-6 text-white animate-pulse">
+            <div className="h-6 bg-white/20 rounded w-48 mb-2"></div>
+            <div className="h-4 bg-white/20 rounded w-80"></div>
+          </div>
+          <LoadingSkeleton type="stats" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <LoadingSkeleton type="card" count={4} />
+            </div>
+            <div>
+              <LoadingSkeleton type="list" count={3} />
+            </div>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -114,60 +185,45 @@ const Dashboard = () => {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Groups</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">{stats.totalGroups}</div>
-              <p className="text-xs text-muted-foreground">Active groups</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">{stats.totalExpenses}</div>
-              <p className="text-xs text-muted-foreground">This month</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Monthly Total</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">${stats.monthlyTotal.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">Total spent</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Balance</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success">${stats.owedAmount.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">You're owed</p>
-            </CardContent>
-          </Card>
+          <QuickStatsCard
+            title="Total Groups"
+            value={stats.totalGroups}
+            subtitle="Active groups"
+            icon={Users}
+            variant="default"
+          />
+          <QuickStatsCard
+            title="Total Expenses"
+            value={stats.totalExpenses}
+            subtitle="This month"
+            icon={CreditCard}
+            variant="default"
+          />
+          <QuickStatsCard
+            title="Monthly Total"
+            value={`$${stats.monthlyTotal.toFixed(2)}`}
+            subtitle="Total spent"
+            icon={DollarSign}
+            variant="default"
+          />
+          <QuickStatsCard
+            title="Balance"
+            value={`$${stats.owedAmount.toFixed(2)}`}
+            subtitle="You're owed"
+            icon={TrendingUp}
+            variant="success"
+          />
         </div>
 
         {/* Quick Actions */}
-        <div className="flex gap-4">
-          <Button className="bg-gradient-primary hover:opacity-90">
+        <div className="flex gap-4 flex-wrap">
+          <Button onClick={handleCreateGroup} className="bg-gradient-primary hover:opacity-90">
             <Plus className="w-4 h-4 mr-2" />
             Create Group
           </Button>
           <Button variant="outline">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Expense
+            <Search className="w-4 h-4 mr-2" />
+            Find Friends
           </Button>
         </div>
 
@@ -177,26 +233,56 @@ const Dashboard = () => {
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Your Groups</h2>
-              <Button variant="ghost" size="sm">View All</Button>
             </div>
 
-            {groups.length === 0 ? (
-              <Card className="p-8 text-center">
-                <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="font-medium mb-2">No groups yet</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Create your first group to start splitting expenses with friends.
-                </p>
-                <Button className="bg-gradient-primary hover:opacity-90">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Group
-                </Button>
-              </Card>
+            {/* Search and Filter */}
+            <SearchAndFilter
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              sortOrder={sortOrder}
+              onSortOrderChange={setSortOrder}
+              placeholder="Search groups..."
+            />
+
+            {filteredGroups.length === 0 ? (
+              groups.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="font-medium mb-2">No groups yet</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Create your first group to start splitting expenses with friends.
+                  </p>
+                  <Button onClick={handleCreateGroup} className="bg-gradient-primary hover:opacity-90">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Group
+                  </Button>
+                </Card>
+              ) : (
+                <Card className="p-8 text-center">
+                  <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="font-medium mb-2">No groups found</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Try adjusting your search terms or create a new group.
+                  </p>
+                  <Button onClick={() => setSearchTerm('')} variant="outline">
+                    Clear Search
+                  </Button>
+                </Card>
+              )
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {groups.slice(0, 4).map((group) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
+                {filteredGroups.slice(0, 6).map((group) => (
                   <GroupCard key={group.id} group={group} onViewGroup={handleViewGroup} />
                 ))}
+                {filteredGroups.length > 6 && (
+                  <Card className="p-6 flex items-center justify-center border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 transition-colors">
+                    <Button variant="ghost" onClick={() => {}}>
+                      View {filteredGroups.length - 6} more groups
+                    </Button>
+                  </Card>
+                )}
               </div>
             )}
           </div>
@@ -223,6 +309,12 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      <CreateGroupModal
+        open={showCreateGroup}
+        onOpenChange={setShowCreateGroup}
+        onGroupCreated={handleGroupCreated}
+      />
     </DashboardLayout>
   );
 };

@@ -3,9 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Expense } from '@/lib/supabase';
+import { useBalances } from '@/hooks/useBalances';
 import DashboardLayout from '@/components/DashboardLayout';
 import ExpenseCard from '@/components/ExpenseCard';
 import AddExpenseModal from '@/components/AddExpenseModal';
+import BalanceCard from '@/components/BalanceCard';
+import SettlementModal from '@/components/SettlementModal';
+import ExpenseHistoryModal from '@/components/ExpenseHistoryModal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,7 +23,9 @@ import {
   TrendingUp, 
   TrendingDown,
   Settings,
-  Loader2
+  Loader2,
+  History,
+  HandCoins
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -54,10 +60,12 @@ interface ExpenseData {
   }>;
 }
 
-interface UserBalance {
-  owes: number;
-  owed: number;
-  net: number;
+interface DebtPair {
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
 }
 
 const GroupDetail = () => {
@@ -67,9 +75,20 @@ const GroupDetail = () => {
   
   const [group, setGroup] = useState<GroupData | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [userBalance, setUserBalance] = useState<UserBalance>({ owes: 0, owed: 0, net: 0 });
   const [loading, setLoading] = useState(true);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showSettlement, setShowSettlement] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState<DebtPair | null>(null);
+
+  // Use the balance calculation hook
+  const { 
+    userBalances, 
+    currentUserBalance, 
+    simplifiedDebts, 
+    loading: balanceLoading, 
+    refetch: refetchBalances 
+  } = useBalances(groupId || '', user?.id);
 
   useEffect(() => {
     if (groupId && user) {
@@ -137,9 +156,6 @@ const GroupDetail = () => {
       // Set basic expenses for now (without complex joins)
       setExpenses(expensesData || []);
 
-      // Skip balance calculation for now
-      setUserBalance({ owes: 0, owed: 0, net: 0 });
-
     } catch (error) {
       console.error('Error fetching group data:', error);
       toast.error('Failed to load group data');
@@ -148,25 +164,15 @@ const GroupDetail = () => {
     }
   };
 
-  const calculateUserBalance = (expensesData: Expense[], userId: string) => {
-    let totalOwed = 0;
-    let totalOwes = 0;
+  const handleSettleUp = (debt: DebtPair) => {
+    setSelectedDebt(debt);
+    setShowSettlement(true);
+  };
 
-    // We need to fetch the splits for accurate calculation
-    // For now, let's use a simplified calculation
-    expensesData.forEach(expense => {
-      if (expense.paid_by === userId) {
-        // User paid the full amount, they are owed the expense minus any amount they owe
-        totalOwed += expense.amount;
-      }
-      // Note: We'll need to subtract what the user owes from splits once we fetch them
-    });
-
-    setUserBalance({
-      owes: totalOwes,
-      owed: totalOwed,
-      net: totalOwed - totalOwes,
-    });
+  const handleSettlementAdded = () => {
+    refetchBalances();
+    setShowSettlement(false);
+    setSelectedDebt(null);
   };
 
   const getInitials = (name: string) => {
@@ -175,11 +181,12 @@ const GroupDetail = () => {
 
   const handleExpenseAdded = async () => {
     await fetchGroupData();
+    refetchBalances();
     setShowAddExpense(false);
-    toast.success('Group data refreshed!');
+    toast.success('Expense added successfully!');
   };
 
-  if (loading) {
+  if (loading || balanceLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -222,13 +229,19 @@ const GroupDetail = () => {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <Button onClick={() => setShowAddExpense(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Expense
-            </Button>
-            <Button variant="outline" size="icon">
-              <Settings className="w-4 h-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setShowAddExpense(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Expense
+              </Button>
+              <Button variant="outline" onClick={() => setShowHistory(true)}>
+                <History className="w-4 h-4 mr-2" />
+                History
+              </Button>
+              <Button variant="outline" size="icon">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -241,7 +254,7 @@ const GroupDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-destructive">
-                ${userBalance.owes.toFixed(2)}
+                ${(currentUserBalance?.owes || 0).toFixed(2)}
               </div>
             </CardContent>
           </Card>
@@ -253,7 +266,7 @@ const GroupDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-success">
-                ${userBalance.owed.toFixed(2)}
+                ${(currentUserBalance?.owed || 0).toFixed(2)}
               </div>
             </CardContent>
           </Card>
@@ -265,15 +278,15 @@ const GroupDetail = () => {
             </CardHeader>
             <CardContent>
               <div className={`text-2xl font-bold ${
-                userBalance.net > 0 ? 'text-success' : 
-                userBalance.net < 0 ? 'text-destructive' : 
+                (currentUserBalance?.net || 0) > 0 ? 'text-success' : 
+                (currentUserBalance?.net || 0) < 0 ? 'text-destructive' : 
                 'text-muted-foreground'
               }`}>
-                ${Math.abs(userBalance.net).toFixed(2)}
+                ${Math.abs(currentUserBalance?.net || 0).toFixed(2)}
               </div>
               <p className="text-xs text-muted-foreground">
-                {userBalance.net > 0 ? 'you are owed' : 
-                 userBalance.net < 0 ? 'you owe' : 
+                {(currentUserBalance?.net || 0) > 0 ? 'you are owed' : 
+                 (currentUserBalance?.net || 0) < 0 ? 'you owe' : 
                  'all settled up'}
               </p>
             </CardContent>
@@ -294,12 +307,39 @@ const GroupDetail = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Expenses */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Recent Expenses</h2>
-              <Button variant="ghost" size="sm">View All</Button>
-            </div>
+          {/* Balances & Expenses */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Balances Section */}
+            {simplifiedDebts.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold">Balances</h2>
+                  <Button variant="ghost" size="sm">
+                    <HandCoins className="w-4 h-4 mr-2" />
+                    Settle All
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {simplifiedDebts.map((debt, index) => (
+                    <BalanceCard
+                      key={`${debt.fromUserId}-${debt.toUserId}-${index}`}
+                      debt={debt}
+                      currentUserId={user?.id || ''}
+                      onSettleUp={handleSettleUp}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Expenses Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Recent Expenses</h2>
+                <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}>
+                  View All
+                </Button>
+              </div>
 
             {expenses.length === 0 ? (
               <Card className="p-8 text-center">
@@ -320,6 +360,7 @@ const GroupDetail = () => {
                 ))}
               </div>
             )}
+            </div>
           </div>
 
           {/* Group Members */}
@@ -364,6 +405,21 @@ const GroupDetail = () => {
         onOpenChange={setShowAddExpense}
         group={group}
         onExpenseAdded={handleExpenseAdded}
+      />
+
+      <SettlementModal
+        open={showSettlement}
+        onOpenChange={setShowSettlement}
+        debt={selectedDebt}
+        groupId={groupId || ''}
+        onSettlementAdded={handleSettlementAdded}
+      />
+
+      <ExpenseHistoryModal
+        open={showHistory}
+        onOpenChange={setShowHistory}
+        groupId={groupId || ''}
+        groupName={group?.name || ''}
       />
     </DashboardLayout>
   );
