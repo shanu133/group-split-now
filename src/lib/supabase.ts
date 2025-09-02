@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 
 // Use the same configuration as the integrations client
 const supabaseUrl = "https://dnlofwunhgitzjozvigz.supabase.co";
