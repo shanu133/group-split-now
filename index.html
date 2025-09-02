@@ -4,102 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChaiPani - Split Expenses Like a Pro</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
+    <meta name="description" content="Split expenses with friends and family easily. Track group expenses, calculate balances, and settle up like a pro." />
+    <meta name="author" content="ChaiPani" />
 
-    <meta property="og:title" content="group-split-now" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    <meta property="og:title" content="ChaiPani - Split Expenses Like a Pro" />
+    <meta property="og:description" content="Split expenses with friends and family easily. Track group expenses, calculate balances, and settle up like a pro." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:image" content="/placeholder.svg" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:title" content="ChaiPani - Split Expenses Like a Pro" />
+    <meta name="twitter:description" content="Split expenses with friends and family easily. Track group expenses, calculate balances, and settle up like a pro." />
+    <meta name="twitter:image" content="/placeholder.svg" />
   </head>
 
   <body>
     <div id="root"></div>
-    
-    <!-- Firebase Auth Elements -->
-    <div id="userDetails"></div>
-    <button id="signInButton">Sign in with Google</button>
-    <button id="signOutButton" style="display: none;">Sign Out</button>
-
-    <!-- React App Script -->
     <script type="module" src="/src/main.tsx"></script>
-
-    <!-- Firebase Authentication Script -->
-    <script type="module">
-      // Import the functions you need from the SDKs
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-      import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-      import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-      // Your web app's Firebase configuration (This is your unique config!)
-      const firebaseConfig = {
-        apiKey: "AIzaSyAvjHZm3FM6P_m99B1VAhdOxGb0yI3rS4s",
-        authDomain: "chaipaani-4751e.firebaseapp.com",
-        projectId: "chaipaani-4751e",
-        storageBucket: "chaipaani-4751e.firebasestorage.app",
-        messagingSenderId: "753911176521",
-        appId: "1:753911176521:web:2aadf2672b2267af638e98",
-        measurementId: "G-ZG2207F45B"
-      };
-
-      // Initialize Firebase
-      const app = initializeApp(firebaseConfig);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
-      const provider = new GoogleAuthProvider();
-
-      // --- DOM Elements ---
-      const signInButton = document.getElementById('signInButton');
-      const signOutButton = document.getElementById('signOutButton');
-      const userDetailsDiv = document.getElementById('userDetails');
-
-      // --- Sign-in Function ---
-      signInButton.onclick = () => {
-        signInWithPopup(auth, provider)
-          .then((result) => {
-            console.log("Signed in successfully!", result.user);
-          })
-          .catch((error) => {
-            console.error("Authentication Error:", error);
-          });
-      };
-
-      // --- Sign-out Function ---
-      signOutButton.onclick = () => {
-        signOut(auth).then(() => {
-            console.log("Signed out");
-        });
-      };
-
-      // --- Listen for Authentication State Changes ---
-      onAuthStateChanged(auth, user => {
-        if (user) {
-          // User is signed in
-          console.log("User is logged in:", user);
-          signInButton.style.display = 'none';
-          signOutButton.style.display = 'block';
-          userDetailsDiv.innerHTML = `Welcome, ${user.displayName}! (${user.email})`;
-
-          // Save user to Firestore (only if they are new)
-          const userRef = doc(db, "users", user.uid);
-          setDoc(userRef, {
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL
-          }, { merge: true }); // merge:true prevents overwriting existing data
-
-        } else {
-          // User is signed out
-          console.log("User is logged out.");
-          signInButton.style.display = 'block';
-          signOutButton.style.display = 'none';
-          userDetailsDiv.innerHTML = '';
-        }
-      });
-    </script>
   </body>
 </html>

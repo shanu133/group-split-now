@@ -1,4 +1,6 @@
 
+import { createClient } from '@supabase/supabase-js';
+
 // Use the same configuration as the integrations client
 const supabaseUrl = "https://dnlofwunhgitzjozvigz.supabase.co";
 const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRubG9md3VuaGdpdHpqb3p2aWd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY1MTAzMjQsImV4cCI6MjA3MjA4NjMyNH0.v56az885rWG8D4BCrLHk4jUPC4OAY8qiAashQy4muG4";
