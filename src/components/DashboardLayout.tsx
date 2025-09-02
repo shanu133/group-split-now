@@ -56,8 +56,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-                SplitWise
+              <h1 className="text-2xl font-bold text-primary">
+                ChaiPani
               </h1>
             </div>
 

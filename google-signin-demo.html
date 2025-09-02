@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Google Sign-In Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #3367d6;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        #signOutButton {
+            background-color: #dc3545;
+        }
+        
+        #signOutButton:hover {
+            background-color: #c82333;
+        }
+        
+        #userDetails {
+            background-color: #e8f5e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+            display: none;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Firebase Google Sign-In Demo</h1>
+        
+        <!-- Sign In Button -->
+        <button id="signInButton">
+            Continue with Google
+        </button>
+        
+        <!-- User Details Display -->
+        <div id="userDetails">
+            <!-- User info will be displayed here -->
+        </div>
+        
+        <!-- Sign Out Button -->
+        <button id="signOutButton" class="hidden">
+            Log Out
+        </button>
+        
+        <!-- Error Display -->
+        <div id="errorMessage" class="error hidden"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import the functions you need from the SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { 
+            getAuth, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            onAuthStateChanged, 
+            signOut 
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAvjHZm3FM6P_m99B1VAhdOxGb0yI3rS4s",
+            authDomain: "chaipaani-4751e.firebaseapp.com",
+            projectId: "chaipaani-4751e",
+            storageBucket: "chaipaani-4751e.firebasestorage.app",
+            messagingSenderId: "753911176521",
+            appId: "1:753911176521:web:2aadf2672b2267af638e98",
+            measurementId: "G-ZG2207F45B"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        // DOM Elements
+        const signInButton = document.getElementById('signInButton');
+        const signOutButton = document.getElementById('signOutButton');
+        const userDetailsDiv = document.getElementById('userDetails');
+        const errorMessageDiv = document.getElementById('errorMessage');
+
+        // Utility Functions
+        function showError(message) {
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+            setTimeout(() => {
+                errorMessageDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function hideError() {
+            errorMessageDiv.classList.add('hidden');
+        }
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                signInButton.classList.add('loading');
+                signInButton.disabled = true;
+                signInButton.textContent = 'Signing in...';
+            } else {
+                signInButton.classList.remove('loading');
+                signInButton.disabled = false;
+                signInButton.textContent = 'Continue with Google';
+            }
+        }
+
+        // Sign In Function
+        signInButton.addEventListener('click', async () => {
+            try {
+                hideError();
+                setLoading(true);
+                
+                const result = await signInWithPopup(auth, provider);
+                console.log("Signed in successfully!", result.user);
+                
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                
+                // Handle specific error cases
+                if (error.code === 'auth/popup-closed-by-user') {
+                    showError('Sign-in was cancelled. Please try again.');
+                } else if (error.code === 'auth/popup-blocked') {
+                    showError('Popup was blocked by your browser. Please allow popups and try again.');
+                } else if (error.code === 'auth/network-request-failed') {
+                    showError('Network error. Please check your internet connection.');
+                } else {
+                    showError(`Sign-in failed: ${error.message}`);
+                }
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // Sign Out Function
+        signOutButton.addEventListener('click', async () => {
+            try {
+                hideError();
+                await signOut(auth);
+                console.log("Signed out successfully");
+            } catch (error) {
+                console.error("Sign out error:", error);
+                showError(`Sign-out failed: ${error.message}`);
+            }
+        });
+
+        // Listen for Authentication State Changes
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // User is signed in
+                console.log("User is logged in:", user);
+                
+                // Update UI for signed-in state
+                signInButton.classList.add('hidden');
+                signOutButton.classList.remove('hidden');
+                userDetailsDiv.classList.remove('hidden');
+                
+                // Display user information
+                userDetailsDiv.innerHTML = `
+                    <h3>Welcome, ${user.displayName || 'User'}!</h3>
+                    <p><strong>Email:</strong> ${user.email}</p>
+                    <p><strong>User ID:</strong> ${user.uid}</p>
+                    ${user.photoURL ? `<img src="${user.photoURL}" alt="Profile" style="width: 50px; height: 50px; border-radius: 50%; margin-top: 10px;">` : ''}
+                `;
+                
+            } else {
+                // User is signed out
+                console.log("User is logged out.");
+                
+                // Update UI for signed-out state
+                signInButton.classList.remove('hidden');
+                signOutButton.classList.add('hidden');
+                userDetailsDiv.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
+
+
